@@ -16,7 +16,11 @@ export type AuditEventType =
   | "chat.session_created"
   | "chat.user_message"
   | "chat.assistant_response"
-  | "llm.completion";
+  | "llm.completion"
+  | "connector.requested"
+  | "connector.connected"
+  | "connector.revoked"
+  | "tool.invoked";
 
 export async function writeAuditEvent(
   agentId: string,

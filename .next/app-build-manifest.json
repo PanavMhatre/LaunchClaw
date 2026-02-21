@@ -10,30 +10,75 @@
       "static/chunks/main-app.js",
       "static/chunks/app/api/v1/agents/[id]/route.js"
     ],
-    "/api/v1/llm/[agentId]/chat/completions/route": [
+    "/api/v1/agents/[id]/audit/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/api/v1/llm/[agentId]/chat/completions/route.js"
+      "static/chunks/app/api/v1/agents/[id]/audit/route.js"
     ],
-    "/api/v1/agents/[id]/tokens/route": [
+    "/api/v1/agents/[id]/instance/off/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/api/v1/agents/[id]/tokens/route.js"
+      "static/chunks/app/api/v1/agents/[id]/instance/off/route.js"
     ],
-    "/api/v1/agents/[id]/heartbeat/route": [
+    "/api/v1/agents/[id]/instance/on/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/api/v1/agents/[id]/heartbeat/route.js"
+      "static/chunks/app/api/v1/agents/[id]/instance/on/route.js"
     ],
     "/api/v1/agents/[id]/chat/sessions/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/api/v1/agents/[id]/chat/sessions/route.js"
     ],
-    "/api/v1/agents/[id]/audit/route": [
+    "/api/v1/agents/[id]/tokens/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/api/v1/agents/[id]/audit/route.js"
+      "static/chunks/app/api/v1/agents/[id]/tokens/route.js"
+    ],
+    "/api/v1/agents/[id]/connectors/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/v1/agents/[id]/connectors/route.js"
+    ],
+    "/api/v1/connectors/[provider]/start/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/v1/connectors/[provider]/start/route.js"
+    ],
+    "/api/v1/connectors/[provider]/callback/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/v1/connectors/[provider]/callback/route.js"
+    ],
+    "/api/v1/tools/twitter.post/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/v1/tools/twitter.post/route.js"
+    ],
+    "/api/v1/tools/slack.postMessage/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/v1/tools/slack.postMessage/route.js"
+    ],
+    "/api/v1/tools/github.createIssue/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/v1/tools/github.createIssue/route.js"
+    ],
+    "/api/v1/tools/gmail.send/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/v1/tools/gmail.send/route.js"
+    ],
+    "/api/v1/tools/gcal.createEvent/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/v1/tools/gcal.createEvent/route.js"
+    ],
+    "/api/v1/agents/[id]/connectors/[provider]/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/v1/agents/[id]/connectors/[provider]/route.js"
     ]
   }
 }

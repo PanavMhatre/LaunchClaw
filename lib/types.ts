@@ -4,6 +4,8 @@ import type {
   agents,
   auditEvents,
   chatSessions,
+  connectors,
+  oauthStates,
   tokenUsageSessions,
   tokenUsageTotals,
 } from "./db/schema";
@@ -19,6 +21,11 @@ export type TokenUsageSession = InferSelectModel<typeof tokenUsageSessions>;
 export type TokenUsageTotal = InferSelectModel<typeof tokenUsageTotals>;
 
 export type AgentStatus = Agent["status"];
+
+export type Connector = InferSelectModel<typeof connectors>;
+export type OAuthState = InferSelectModel<typeof oauthStates>;
+export type ConnectorProvider = "slack" | "google" | "github" | "twitter";
+export type ConnectorStatus = "pending" | "connected" | "revoked" | "error";
 
 // ---------------------------------------------------------------------------
 // Tunnel wire protocol (WS server <-> agentd)
@@ -92,6 +99,61 @@ export const createAgentSchema = z.object({
 });
 
 export type CreateAgentRequest = z.infer<typeof createAgentSchema>;
+
+// ---------------------------------------------------------------------------
+// Connector request validation
+// ---------------------------------------------------------------------------
+
+export const connectorProviderSchema = z.enum([
+  "slack",
+  "google",
+  "github",
+  "twitter",
+]);
+
+export const oauthStartSchema = z.object({
+  agent_id: z.string().uuid(),
+  redirect_url: z.string().url(),
+});
+
+export type OAuthStartRequest = z.infer<typeof oauthStartSchema>;
+
+// ---------------------------------------------------------------------------
+// Tool request schemas
+// ---------------------------------------------------------------------------
+
+export const slackPostMessageSchema = z.object({
+  agent_id: z.string().uuid(),
+  channel: z.string().min(1),
+  text: z.string().min(1),
+});
+
+export const githubCreateIssueSchema = z.object({
+  agent_id: z.string().uuid(),
+  owner: z.string().min(1),
+  repo: z.string().min(1),
+  title: z.string().min(1),
+  body: z.string().optional(),
+});
+
+export const gmailSendSchema = z.object({
+  agent_id: z.string().uuid(),
+  to: z.string().email(),
+  subject: z.string().min(1),
+  body: z.string().min(1),
+});
+
+export const gcalCreateEventSchema = z.object({
+  agent_id: z.string().uuid(),
+  summary: z.string().min(1),
+  start: z.string(),
+  end: z.string(),
+});
+
+export const twitterPostSchema = z.object({
+  agent_id: z.string().uuid(),
+  text: z.string().min(1).max(280),
+});
 
 // ---------------------------------------------------------------------------
 // DigitalOcean API response types

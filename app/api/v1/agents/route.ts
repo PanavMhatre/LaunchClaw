@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { desc } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { agents, tokenUsageTotals } from "@/lib/db/schema";
+import { agents, connectors, tokenUsageTotals } from "@/lib/db/schema";
 import { createAgentSchema } from "@/lib/types";
 import { createDroplet, DoApiError } from "@/lib/do-client";
 import { generateCloudInit } from "@/lib/cloud-init";
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { name, region, size } = parsed.data;
+  const { name, region, size, connections } = parsed.data;
   const agentId = crypto.randomUUID();
   const bootToken = crypto.randomUUID().replace(/-/g, "");
   const deviceToken = crypto.randomUUID().replace(/-/g, "");
@@ -94,6 +94,28 @@ export async function POST(req: NextRequest) {
         totalOutputTokens: 0,
       })
       .run();
+
+    // Create pending connector rows for requested connections
+    const validProviders = ["slack", "google", "github", "twitter"];
+    for (const provider of connections) {
+      if (validProviders.includes(provider)) {
+        db.insert(connectors)
+          .values({
+            id: crypto.randomUUID(),
+            agentId,
+            provider,
+            status: "pending",
+            scopes: null,
+            accessTokenEncrypted: null,
+            refreshTokenEncrypted: null,
+            expiresAt: null,
+            createdAt: now,
+          })
+          .run();
+
+        await writeAuditEvent(agentId, "connector.requested", { provider });
+      }
+    }
 
     await writeAuditEvent(agentId, "instance.creating", {
       dropletId: doRes.droplet.id,

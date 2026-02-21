@@ -58,3 +58,29 @@ export const tokenUsageTotals = sqliteTable("token_usage_totals", {
   totalInputTokens: integer("total_input_tokens").notNull().default(0),
   totalOutputTokens: integer("total_output_tokens").notNull().default(0),
 });
+
+export const connectors = sqliteTable("connectors", {
+  id: text("id").primaryKey(),
+  agentId: text("agent_id")
+    .notNull()
+    .references(() => agents.id, { onDelete: "cascade" }),
+  provider: text("provider", {
+    enum: ["slack", "google", "github", "twitter"],
+  }).notNull(),
+  status: text("status", {
+    enum: ["pending", "connected", "revoked", "error"],
+  }).notNull(),
+  scopes: text("scopes"),
+  accessTokenEncrypted: text("access_token_encrypted"),
+  refreshTokenEncrypted: text("refresh_token_encrypted"),
+  expiresAt: integer("expires_at"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
+export const oauthStates = sqliteTable("oauth_states", {
+  state: text("state").primaryKey(),
+  agentId: text("agent_id").notNull(),
+  provider: text("provider").notNull(),
+  redirectUrl: text("redirect_url").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
