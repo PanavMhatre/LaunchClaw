@@ -1,15 +1,39 @@
 {
   "pages": {
-    "/layout": [
+    "/api/v1/agents/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/css/app/layout.css",
-      "static/chunks/app/layout.js"
+      "static/chunks/app/api/v1/agents/route.js"
     ],
-    "/page": [
+    "/api/v1/agents/[id]/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/page.js"
+      "static/chunks/app/api/v1/agents/[id]/route.js"
+    ],
+    "/api/v1/llm/[agentId]/chat/completions/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/v1/llm/[agentId]/chat/completions/route.js"
+    ],
+    "/api/v1/agents/[id]/tokens/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/v1/agents/[id]/tokens/route.js"
+    ],
+    "/api/v1/agents/[id]/heartbeat/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/v1/agents/[id]/heartbeat/route.js"
+    ],
+    "/api/v1/agents/[id]/chat/sessions/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/v1/agents/[id]/chat/sessions/route.js"
+    ],
+    "/api/v1/agents/[id]/audit/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/v1/agents/[id]/audit/route.js"
     ]
   }
 }
