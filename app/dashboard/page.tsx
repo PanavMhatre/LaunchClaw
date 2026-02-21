@@ -119,7 +119,7 @@ export default function LaunchClawDashboard() {
               </div>
               <Button
                 variant="outline"
-                onClick={() => router.push("/")}
+                onClick={() => router.push("/agents")}
                 className="mt-3 h-8 w-full border-neutral-700 text-neutral-300 hover:bg-neutral-700 bg-transparent"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
