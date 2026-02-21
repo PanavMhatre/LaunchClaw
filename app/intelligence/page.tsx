@@ -1,379 +1,351 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Search, FileText, Eye, Download, Filter, Globe, Shield, AlertTriangle } from "lucide-react"
+import { AlertTriangle, CheckCircle, RefreshCw, Shield, XCircle } from "lucide-react"
+
+type MetricsResponse = {
+  cpuPercent: number
+  ramPercent: number
+  ramUsedGb: number
+  ramTotalGb: number
+  storagePercent: number
+  storageUsedGb: number
+  storageTotalGb: number
+  storageAvailable: boolean
+  updatedAt: string
+}
+
+type SkillScanResult = {
+  file: string
+  status: "safe" | "warning"
+  findings: string[]
+}
+
+type ScanResponse = {
+  scannedAt: string
+  skills: {
+    scannedAt: string
+    total: number
+    safe: number
+    warning: number
+    results: SkillScanResult[]
+  }
+  workflows: {
+    status: "safe" | "warning"
+    scannedFiles: number
+    issues: string[]
+  }
+  apis: {
+    status: "safe" | "warning"
+    externalDomains: string[]
+    riskyDomains: string[]
+  }
+  docker: {
+    status: "safe" | "warning" | "info"
+    dockerfile: boolean
+    compose: boolean
+    engineReachable: boolean
+    engineVersion: string
+    details: string
+  }
+}
+
+function StatusBadge({ status }: { status: "safe" | "warning" | "info" }) {
+  if (status === "safe") {
+    return <Badge className="bg-white/20 text-white">SAFE</Badge>
+  }
+
+  if (status === "warning") {
+    return <Badge className="bg-red-500/20 text-red-500">WARNING</Badge>
+  }
+
+  return <Badge className="bg-neutral-500/20 text-neutral-300">INFO</Badge>
+}
+
+function ProgressBar({ value }: { value: number }) {
+  const normalized = Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0
+
+  return (
+    <div className="w-full bg-neutral-800 rounded-full h-2">
+      <div className="bg-orange-500 h-2 rounded-full transition-all duration-300" style={{ width: `${normalized}%` }} />
+    </div>
+  )
+}
+
+function formatPercent(value: number | null | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "--"
+  return `${value.toFixed(1)}%`
+}
+
+function formatGb(value: number | null | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "--"
+  return `${value.toFixed(2)} GB`
+}
+
+function formatTime(value: string | null | undefined) {
+  if (!value) return "--"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "--"
+  return date.toLocaleTimeString()
+}
 
 export default function IntelligencePage() {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedReport, setSelectedReport] = useState(null)
+  const [metrics, setMetrics] = useState<MetricsResponse | null>(null)
+  const [metricsLoading, setMetricsLoading] = useState(true)
+  const [metricsError, setMetricsError] = useState("")
 
-  const reports = [
-    {
-      id: "INT-2025-001",
-      title: "CYBERCRIME NETWORK ANALYSIS",
-      classification: "TOP SECRET",
-      source: "SIGINT",
-      location: "Eastern Europe",
-      date: "2025-06-17",
-      status: "verified",
-      threat: "high",
-      summary: "Detailed analysis of emerging cybercrime syndicate operating across multiple jurisdictions",
-      tags: ["cybercrime", "international", "financial"],
-    },
-    {
-      id: "INT-2025-002",
-      title: "ROGUE AGENT COMMUNICATIONS",
-      classification: "SECRET",
-      source: "HUMINT",
-      location: "Berlin",
-      date: "2025-06-16",
-      status: "pending",
-      threat: "critical",
-      summary: "Intercepted communications suggesting potential security breach in European operations",
-      tags: ["internal", "security", "communications"],
-    },
-    {
-      id: "INT-2025-003",
-      title: "ARMS TRAFFICKING ROUTES",
-      classification: "CONFIDENTIAL",
-      source: "OSINT",
-      location: "Middle East",
-      date: "2025-06-15",
-      status: "verified",
-      threat: "medium",
-      summary: "Updated intelligence on weapons smuggling corridors through Mediterranean region",
-      tags: ["trafficking", "weapons", "maritime"],
-    },
-    {
-      id: "INT-2025-004",
-      title: "TERRORIST CELL SURVEILLANCE",
-      classification: "TOP SECRET",
-      source: "HUMINT",
-      location: "North Africa",
-      date: "2025-06-14",
-      status: "active",
-      threat: "critical",
-      summary: "Ongoing surveillance of suspected terrorist cell planning coordinated attacks",
-      tags: ["terrorism", "surveillance", "coordinated"],
-    },
-    {
-      id: "INT-2025-005",
-      title: "DIPLOMATIC INTELLIGENCE BRIEF",
-      classification: "SECRET",
-      source: "DIPLOMATIC",
-      location: "Asia Pacific",
-      date: "2025-06-13",
-      status: "verified",
-      threat: "low",
-      summary: "Political developments affecting regional security and operational considerations",
-      tags: ["diplomatic", "political", "regional"],
-    },
-  ]
+  const [scanData, setScanData] = useState<ScanResponse | null>(null)
+  const [scanLoading, setScanLoading] = useState(false)
+  const [scanError, setScanError] = useState("")
 
-  const getClassificationColor = (classification) => {
-    switch (classification) {
-      case "TOP SECRET":
-        return "bg-red-500/20 text-red-500"
-      case "SECRET":
-        return "bg-orange-500/20 text-orange-500"
-      case "CONFIDENTIAL":
-        return "bg-neutral-500/20 text-neutral-300"
-      default:
-        return "bg-white/20 text-white"
+  const fetchMetrics = useCallback(async () => {
+    try {
+      setMetricsError("")
+      const response = await fetch("/api/security/metrics", { cache: "no-store" })
+      if (!response.ok) {
+        throw new Error(`Metrics request failed with ${response.status}`)
+      }
+
+      const data: MetricsResponse = await response.json()
+      setMetrics(data)
+    } catch {
+      setMetricsError("Unable to load live system usage metrics.")
+    } finally {
+      setMetricsLoading(false)
     }
-  }
+  }, [])
 
-  const getThreatColor = (threat) => {
-    switch (threat) {
-      case "critical":
-        return "bg-red-500/20 text-red-500"
-      case "high":
-        return "bg-orange-500/20 text-orange-500"
-      case "medium":
-        return "bg-neutral-500/20 text-neutral-300"
-      case "low":
-        return "bg-white/20 text-white"
-      default:
-        return "bg-neutral-500/20 text-neutral-300"
+  const runScan = useCallback(async () => {
+    try {
+      setScanLoading(true)
+      setScanError("")
+
+      const response = await fetch("/api/security/scan", { cache: "no-store" })
+      if (!response.ok) {
+        throw new Error(`Scan request failed with ${response.status}`)
+      }
+
+      const data: ScanResponse = await response.json()
+      setScanData(data)
+    } catch {
+      setScanError("Unable to complete security scan.")
+    } finally {
+      setScanLoading(false)
     }
-  }
+  }, [])
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "verified":
-        return "bg-white/20 text-white"
-      case "pending":
-        return "bg-orange-500/20 text-orange-500"
-      case "active":
-        return "bg-white/20 text-white"
-      default:
-        return "bg-neutral-500/20 text-neutral-300"
-    }
-  }
+  useEffect(() => {
+    void fetchMetrics()
+    void runScan()
 
-  const filteredReports = reports.filter(
-    (report) =>
-      report.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.tags.some((tag) => tag.toLowerCase().includes(searchTerm.toLowerCase())),
-  )
+    const intervalId = window.setInterval(() => {
+      void fetchMetrics()
+    }, 5000)
+
+    return () => window.clearInterval(intervalId)
+  }, [fetchMetrics, runScan])
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-wider">INTELLIGENCE CENTER</h1>
-          <p className="text-sm text-neutral-400">Classified reports and threat analysis</p>
+          <h1 className="text-2xl font-bold text-white tracking-wider">SECURITY CENTER</h1>
+          <p className="text-sm text-neutral-400">Live resource usage and autonomous safety scanning</p>
         </div>
         <div className="flex gap-2">
-          <Button className="bg-orange-500 hover:bg-orange-600 text-white">New Report</Button>
-          <Button className="bg-orange-500 hover:bg-orange-600 text-white">
-            <Filter className="w-4 h-4 mr-2" />
-            Filter
+          <Button
+            onClick={() => void fetchMetrics()}
+            variant="outline"
+            className="border-neutral-700 text-neutral-300 hover:bg-neutral-800 bg-transparent"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh Usage
+          </Button>
+          <Button onClick={() => void runScan()} className="bg-orange-500 hover:bg-orange-600 text-white">
+            <Shield className="w-4 h-4 mr-2" />
+            Run Security Scan
           </Button>
         </div>
       </div>
 
-      {/* Stats and Search */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-        <Card className="lg:col-span-2 bg-neutral-900 border-neutral-700">
-          <CardContent className="p-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-neutral-400" />
-              <Input
-                placeholder="Search intelligence reports..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 bg-neutral-800 border-neutral-600 text-white placeholder-neutral-400"
-              />
+      {metricsError && <div className="text-sm text-red-400">{metricsError}</div>}
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="bg-neutral-900 border-neutral-700">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-neutral-400 tracking-wider">CPU USAGE</p>
+              <p className="text-lg font-bold text-white font-mono">
+                {metricsLoading ? "--" : formatPercent(metrics?.cpuPercent)}
+              </p>
             </div>
+            <ProgressBar value={metrics?.cpuPercent ?? 0} />
           </CardContent>
         </Card>
 
         <Card className="bg-neutral-900 border-neutral-700">
-          <CardContent className="p-4">
+          <CardContent className="p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-neutral-400 tracking-wider">TOTAL REPORTS</p>
-                <p className="text-2xl font-bold text-white font-mono">1,247</p>
-              </div>
-              <FileText className="w-8 h-8 text-white" />
+              <p className="text-xs text-neutral-400 tracking-wider">RAM USAGE</p>
+              <p className="text-lg font-bold text-white font-mono">
+                {metricsLoading ? "--" : formatPercent(metrics?.ramPercent)}
+              </p>
             </div>
+            <ProgressBar value={metrics?.ramPercent ?? 0} />
+            {!metricsLoading && metrics && (
+              <p className="text-xs text-neutral-500 font-mono">
+                {formatGb(metrics.ramUsedGb)} / {formatGb(metrics.ramTotalGb)}
+              </p>
+            )}
           </CardContent>
         </Card>
 
         <Card className="bg-neutral-900 border-neutral-700">
-          <CardContent className="p-4">
+          <CardContent className="p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-neutral-400 tracking-wider">CRITICAL THREATS</p>
-                <p className="text-2xl font-bold text-red-500 font-mono">12</p>
-              </div>
-              <AlertTriangle className="w-8 h-8 text-red-500" />
+              <p className="text-xs text-neutral-400 tracking-wider">STORAGE USAGE</p>
+              <p className="text-lg font-bold text-white font-mono">
+                {metricsLoading ? "--" : metrics?.storageAvailable ? formatPercent(metrics.storagePercent) : "N/A"}
+              </p>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-neutral-900 border-neutral-700">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-neutral-400 tracking-wider">ACTIVE SOURCES</p>
-                <p className="text-2xl font-bold text-white font-mono">89</p>
-              </div>
-              <Globe className="w-8 h-8 text-white" />
-            </div>
+            <ProgressBar value={metrics?.storagePercent ?? 0} />
+            {!metricsLoading && metrics?.storageAvailable && (
+              <p className="text-xs text-neutral-500 font-mono">
+                {formatGb(metrics.storageUsedGb)} / {formatGb(metrics.storageTotalGb)}
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Intelligence Reports */}
       <Card className="bg-neutral-900 border-neutral-700">
         <CardHeader>
-          <CardTitle className="text-sm font-medium text-neutral-300 tracking-wider">INTELLIGENCE REPORTS</CardTitle>
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="text-sm font-medium text-neutral-300 tracking-wider">SKILL FILE SAFETY SCAN</CardTitle>
+            {scanData && (
+              <div className="flex items-center gap-2 text-xs">
+                <Badge className="bg-white/20 text-white">SAFE: {scanData.skills.safe}</Badge>
+                <Badge className="bg-red-500/20 text-red-500">WARNING: {scanData.skills.warning}</Badge>
+              </div>
+            )}
+          </div>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {filteredReports.map((report) => (
-              <div
-                key={report.id}
-                className="border border-neutral-700 rounded p-4 hover:border-orange-500/50 transition-colors cursor-pointer"
-                onClick={() => setSelectedReport(report)}
-              >
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                  <div className="flex-1 space-y-2">
-                    <div className="flex items-start gap-3">
-                      <FileText className="w-5 h-5 text-neutral-400 mt-0.5" />
-                      <div className="flex-1">
-                        <h3 className="text-sm font-bold text-white tracking-wider">{report.title}</h3>
-                        <p className="text-xs text-neutral-400 font-mono">{report.id}</p>
-                      </div>
-                    </div>
+        <CardContent className="space-y-3">
+          {scanLoading && <p className="text-sm text-neutral-400">Scanning skill files...</p>}
+          {scanError && <p className="text-sm text-red-400">{scanError}</p>}
+          {!scanLoading && scanData && scanData.skills.total === 0 && (
+            <p className="text-sm text-neutral-400">No `SKILL.md` files found to scan.</p>
+          )}
 
-                    <p className="text-sm text-neutral-300 ml-8">{report.summary}</p>
-
-                    <div className="flex flex-wrap gap-2 ml-8">
-                      {report.tags.map((tag) => (
-                        <Badge key={tag} className="bg-neutral-800 text-neutral-300 text-xs">
-                          {tag}
-                        </Badge>
+          {!scanLoading && scanData && scanData.skills.total > 0 && (
+            <div className="space-y-2">
+              {scanData.skills.results.map((result) => (
+                <div key={result.file} className="border border-neutral-700 rounded p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm text-white font-mono">{result.file}</p>
+                    <StatusBadge status={result.status} />
+                  </div>
+                  {result.findings.length > 0 && (
+                    <div className="mt-2 text-xs text-red-400">
+                      {result.findings.map((finding) => (
+                        <p key={`${result.file}-${finding}`}>- {finding}</p>
                       ))}
                     </div>
-                  </div>
-
-                  <div className="flex flex-col sm:items-end gap-2">
-                    <div className="flex flex-wrap gap-2">
-                      <Badge className={getClassificationColor(report.classification)}>{report.classification}</Badge>
-                      <Badge className={getThreatColor(report.threat)}>{report.threat.toUpperCase()}</Badge>
-                      <Badge className={getStatusColor(report.status)}>{report.status.toUpperCase()}</Badge>
-                    </div>
-
-                    <div className="text-xs text-neutral-400 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <Globe className="w-3 h-3" />
-                        <span>{report.location}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Shield className="w-3 h-3" />
-                        <span>{report.source}</span>
-                      </div>
-                      <div className="font-mono">{report.date}</div>
-                    </div>
-                  </div>
+                  )}
                 </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="bg-neutral-900 border-neutral-700">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium text-neutral-300 tracking-wider">
+            AGENTIC WORKFLOWS, APIS, AND DOCKER SCAN
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="border border-neutral-700 rounded p-4 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-neutral-400 tracking-wider">WORKFLOWS</p>
+              {scanData ? <StatusBadge status={scanData.workflows.status} /> : <Badge className="bg-neutral-800 text-neutral-300">PENDING</Badge>}
+            </div>
+            <p className="text-sm text-neutral-300">Scanned files: {scanData?.workflows.scannedFiles ?? 0}</p>
+            {scanData?.workflows.issues.length ? (
+              <div className="text-xs text-red-400 space-y-1 max-h-36 overflow-auto">
+                {scanData.workflows.issues.map((issue) => (
+                  <p key={issue}>- {issue}</p>
+                ))}
               </div>
-            ))}
+            ) : (
+              <p className="text-xs text-neutral-500">No suspicious workflow patterns found.</p>
+            )}
+          </div>
+
+          <div className="border border-neutral-700 rounded p-4 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-neutral-400 tracking-wider">API SURFACE</p>
+              {scanData ? <StatusBadge status={scanData.apis.status} /> : <Badge className="bg-neutral-800 text-neutral-300">PENDING</Badge>}
+            </div>
+            {scanData?.apis.externalDomains.length ? (
+              <div className="text-xs text-neutral-300 space-y-1 max-h-32 overflow-auto">
+                {scanData.apis.externalDomains.map((domain) => (
+                  <p key={domain}>- {domain}</p>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-neutral-500">No external API domains detected.</p>
+            )}
+            {Boolean(scanData?.apis.riskyDomains.length) && (
+              <div className="text-xs text-red-400 space-y-1">
+                {scanData?.apis.riskyDomains.map((domain) => (
+                  <p key={domain}>- flagged: {domain}</p>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="border border-neutral-700 rounded p-4 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-neutral-400 tracking-wider">DOCKER</p>
+              {scanData ? <StatusBadge status={scanData.docker.status} /> : <Badge className="bg-neutral-800 text-neutral-300">PENDING</Badge>}
+            </div>
+            <p className="text-sm text-neutral-300">Dockerfile: {scanData?.docker.dockerfile ? "Found" : "Missing"}</p>
+            <p className="text-sm text-neutral-300">Compose: {scanData?.docker.compose ? "Found" : "Missing"}</p>
+            <p className="text-sm text-neutral-300">
+              Engine: {scanData?.docker.engineReachable ? `Reachable (${scanData.docker.engineVersion || "version unknown"})` : "Not reachable"}
+            </p>
+            <p className="text-xs text-neutral-500">{scanData?.docker.details ?? "Waiting for scan..."}</p>
           </div>
         </CardContent>
       </Card>
 
-      {/* Report Detail Modal */}
-      {selectedReport && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <Card className="bg-neutral-900 border-neutral-700 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-xl font-bold text-white tracking-wider">{selectedReport.title}</CardTitle>
-                <p className="text-sm text-neutral-400 font-mono">{selectedReport.id}</p>
-              </div>
-              <Button
-                variant="ghost"
-                onClick={() => setSelectedReport(null)}
-                className="text-neutral-400 hover:text-white"
-              >
-                ✕
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-medium text-neutral-300 tracking-wider mb-2">CLASSIFICATION</h3>
-                    <div className="flex gap-2">
-                      <Badge className={getClassificationColor(selectedReport.classification)}>
-                        {selectedReport.classification}
-                      </Badge>
-                      <Badge className={getThreatColor(selectedReport.threat)}>
-                        THREAT: {selectedReport.threat.toUpperCase()}
-                      </Badge>
-                    </div>
-                  </div>
+      {metrics?.updatedAt && (
+        <div className="text-xs text-neutral-500 flex items-center gap-2">
+          <RefreshCw className="w-3 h-3" />
+          Metrics updated: {formatTime(metrics.updatedAt)}
+        </div>
+      )}
 
-                  <div>
-                    <h3 className="text-sm font-medium text-neutral-300 tracking-wider mb-2">SOURCE DETAILS</h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-neutral-400">Source Type:</span>
-                        <span className="text-white font-mono">{selectedReport.source}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-neutral-400">Location:</span>
-                        <span className="text-white">{selectedReport.location}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-neutral-400">Date:</span>
-                        <span className="text-white font-mono">{selectedReport.date}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-neutral-400">Status:</span>
-                        <Badge className={getStatusColor(selectedReport.status)}>
-                          {selectedReport.status.toUpperCase()}
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+      {scanData?.scannedAt && (
+        <div className="text-xs text-neutral-500 flex items-center gap-2">
+          {scanData.workflows.status === "safe" && scanData.apis.status === "safe" ? (
+            <CheckCircle className="w-3 h-3 text-white" />
+          ) : (
+            <AlertTriangle className="w-3 h-3 text-orange-500" />
+          )}
+          Last full scan: {new Date(scanData.scannedAt).toLocaleString()}
+        </div>
+      )}
 
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-medium text-neutral-300 tracking-wider mb-2">TAGS</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedReport.tags.map((tag) => (
-                        <Badge key={tag} className="bg-neutral-800 text-neutral-300">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="text-sm font-medium text-neutral-300 tracking-wider mb-2">THREAT ASSESSMENT</h3>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-neutral-400">Threat Level</span>
-                        <Badge className={getThreatColor(selectedReport.threat)}>
-                          {selectedReport.threat.toUpperCase()}
-                        </Badge>
-                      </div>
-                      <div className="w-full bg-neutral-800 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full transition-all duration-300 ${
-                            selectedReport.threat === "critical"
-                              ? "bg-red-500 w-full"
-                              : selectedReport.threat === "high"
-                                ? "bg-orange-500 w-3/4"
-                                : selectedReport.threat === "medium"
-                                  ? "bg-neutral-400 w-1/2"
-                                  : "bg-white w-1/4"
-                          }`}
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-medium text-neutral-300 tracking-wider mb-2">EXECUTIVE SUMMARY</h3>
-                <p className="text-sm text-neutral-300 leading-relaxed">{selectedReport.summary}</p>
-              </div>
-
-              <div className="flex gap-2 pt-4 border-t border-neutral-700">
-                <Button className="bg-orange-500 hover:bg-orange-600 text-white">
-                  <Eye className="w-4 h-4 mr-2" />
-                  View Full Report
-                </Button>
-                <Button
-                  variant="outline"
-                  className="border-neutral-700 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-300 bg-transparent"
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  Download
-                </Button>
-                <Button
-                  variant="outline"
-                  className="border-neutral-700 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-300 bg-transparent"
-                >
-                  Share Intel
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+      {scanError && (
+        <div className="text-xs text-red-400 flex items-center gap-2">
+          <XCircle className="w-3 h-3" />
+          {scanError}
         </div>
       )}
     </div>

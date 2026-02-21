@@ -1,9 +1,5 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
-  "/page": "app/page.js",
-  "/intelligence/page": "app/intelligence/page.js",
-  "/operations/page": "app/operations/page.js",
-  "/command-center/page": "app/command-center/page.js",
-  "/agent-network/page": "app/agent-network/page.js",
-  "/systems/page": "app/systems/page.js"
+  "/api/security/metrics/route": "app/api/security/metrics/route.js",
+  "/api/security/scan/route": "app/api/security/scan/route.js",
+  "/page": "app/page.js"
 }

@@ -1,11 +1,12 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ChevronRight, Monitor, Settings, Shield, Target, Bell, RefreshCw } from "lucide-react"
+import { ChevronRight, Monitor, Settings, Shield, Target, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import CommandCenterPage from "./command-center/page"
 import OperationsPage from "./operations/page"
 import IntelligencePage from "./intelligence/page"
+import LogsPage from "./logs/page"
 import SystemsPage from "./systems/page"
 
 export default function LaunchClawDashboard() {
@@ -23,12 +24,28 @@ export default function LaunchClawDashboard() {
     return () => window.removeEventListener("resize", updateViewport)
   }, [])
   const sections = [
-    { id: "chat", icon: Monitor, label: "CHAT", component: <CommandCenterPage /> },
-    { id: "security", icon: Shield, label: "SECURITY", component: <IntelligencePage /> },
-    { id: "control", icon: Target, label: "CONTROL", component: <OperationsPage /> },
-    { id: "usage", icon: Settings, label: "USAGE", component: <SystemsPage /> },
+    { id: "chat", icon: Monitor, label: "CHAT" },
+    { id: "security", icon: Shield, label: "SECURITY" },
+    { id: "logs", icon: FileText, label: "LOGS" },
+    { id: "control", icon: Target, label: "CONTROL" },
+    { id: "usage", icon: Settings, label: "USAGE" },
   ]
-  const activeSectionConfig = sections.find((section) => section.id === activeSection) ?? sections[0]
+  const sectionLabels: Record<string, string> = {
+    chat: "CHAT",
+    security: "SECURITY",
+    logs: "LOGS",
+    control: "CONTROL",
+    usage: "USAGE",
+  }
+  const sectionComponents: Record<string, JSX.Element> = {
+    chat: <CommandCenterPage />,
+    security: <IntelligencePage />,
+    logs: <LogsPage />,
+    control: <OperationsPage />,
+    usage: <SystemsPage />,
+  }
+  const activeSectionLabel = sectionLabels[activeSection] ?? sectionLabels.chat
+  const activeSectionComponent = sectionComponents[activeSection] ?? sectionComponents.chat
 
   return (
     <div className="flex h-screen">
@@ -99,22 +116,16 @@ export default function LaunchClawDashboard() {
         <div className="h-16 bg-neutral-800 border-b border-neutral-700 flex items-center justify-between px-6">
           <div className="flex items-center gap-4">
             <div className="text-sm text-neutral-400">
-              LAUNCHCLAW / <span className="text-orange-500">{activeSectionConfig.label}</span>
+              LAUNCHCLAW / <span className="text-orange-500">{activeSectionLabel}</span>
             </div>
           </div>
           <div className="flex items-center gap-4">
             <div className="text-xs text-neutral-500">LAST UPDATE: 05/06/2025 20:00 UTC</div>
-            <Button variant="ghost" size="icon" className="text-neutral-400 hover:text-orange-500">
-              <Bell className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="text-neutral-400 hover:text-orange-500">
-              <RefreshCw className="w-4 h-4" />
-            </Button>
           </div>
         </div>
 
         {/* Dashboard Content */}
-        <div className="flex-1 overflow-auto">{activeSectionConfig.component}</div>
+        <div className="flex-1 overflow-auto">{activeSectionComponent}</div>
       </div>
     </div>
   )
