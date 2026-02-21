@@ -9,15 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 const initialMessages = [
   {
     role: "assistant",
-    text: "LaunchClaw AI online. Share your objective and I will coordinate the next action set.",
-  },
-  {
-    role: "user",
-    text: "Summarize current system posture and flag critical anomalies.",
-  },
-  {
-    role: "assistant",
-    text: "Posture stable. Two anomaly clusters detected in access-control logs. I can generate a response plan now.",
+    text: "OpenClaw Agent online. Share your objective and I will coordinate the next action set.",
   },
 ]
 

@@ -1,5 +1,5 @@
 {
-  "/api/security/metrics/route": "app/api/security/metrics/route.js",
-  "/api/security/scan/route": "app/api/security/scan/route.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
   "/page": "app/page.js"
 }
