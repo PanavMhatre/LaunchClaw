@@ -1,1 +1,93 @@
-/node_modules/.next
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# Build outputs
+/.next
+/out
+/build
+/dist
+
+# Cache
+.cache
+*.cache
+.turbo
+.eslintcache
+*.tsbuildinfo
+next-env.d.ts
+
+# Vercel
+.vercel
+
+# Testing
+/coverage
+.nyc_output
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+lerna-debug.log*
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE / Editors
+.idea
+.vscode
+*.swp
+*.swo
+*~
+*.sublime-workspace
+*.sublime-project
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# TypeScript
+*.tsbuildinfo
+
+# Storybook
+storybook-static
+
+# PWA
+**/public/sw.js
+**/public/workbox-*.js
+**/public/worker-*.js
+**/public/sw.js.map
+**/public/workbox-*.js.map
+
+# Sentry
+.sentryclirc
+
+# Local development
+*.local
+*.log
+
+# Misc
+*.pem
+.npmrc
+
+# SQLite database
+launchclaw.db
+launchclaw.db-wal
+launchclaw.db-shm
+
+# Drizzle migrations output
+/drizzle
+
+# Planning/docs (local only)
+/planning
