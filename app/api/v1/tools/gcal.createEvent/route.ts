@@ -31,14 +31,14 @@ export async function POST(req: NextRequest) {
 
   const eventId = `stub_${crypto.randomUUID()}`;
 
-  await writeAuditEvent(agent_id, "tool.invoked", {
+  await writeAuditEvent(agent_id, "tool.succeeded", {
     tool: "gcal.createEvent",
     summary,
     start,
     end,
     stubbed: true,
     event_id: eventId,
-  });
+  }, "agent");
 
   return NextResponse.json({ ok: true, event_id: eventId });
 }

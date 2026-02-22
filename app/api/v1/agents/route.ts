@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { desc } from "drizzle-orm";
+import { desc, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { agents, connectors, tokenUsageTotals } from "@/lib/db/schema";
 import { createAgentSchema } from "@/lib/types";
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
           })
           .run();
 
-        await writeAuditEvent(agentId, "connector.requested", { provider });
+        await writeAuditEvent(agentId, "connector.requested", { provider }, "user");
       }
     }
 
@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
       dropletId: doRes.droplet.id,
       region,
       size,
-    });
+    }, "user");
 
     return NextResponse.json(
       { agent_id: agentId, status: "creating" },
@@ -138,11 +138,12 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET /api/v1/agents — List all agents
+// GET /api/v1/agents — List all agents (excludes soft-deleted)
 export async function GET() {
   const rows = db
     .select()
     .from(agents)
+    .where(isNull(agents.deletedAt))
     .orderBy(desc(agents.createdAt))
     .all();
 

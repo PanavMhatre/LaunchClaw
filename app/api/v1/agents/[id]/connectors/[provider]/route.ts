@@ -33,7 +33,7 @@ export async function DELETE(_req: NextRequest, ctx: RouteCtx) {
     .where(eq(connectors.id, row.id))
     .run();
 
-  await writeAuditEvent(id, "connector.revoked", { provider });
+  await writeAuditEvent(id, "connector.revoked", { provider }, "user");
 
   return NextResponse.json({ revoked: true, provider });
 }

@@ -4,11 +4,20 @@ import { db } from "@/lib/db";
 import { agents } from "@/lib/db/schema";
 import { powerOnDroplet, DoApiError } from "@/lib/do-client";
 import { writeAuditEvent } from "@/lib/audit";
+import { rateLimit } from "@/lib/rate-limit";
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
 // POST /api/v1/agents/:id/instance/on — Power on
-export async function POST(_req: NextRequest, ctx: RouteCtx) {
+export async function POST(req: NextRequest, ctx: RouteCtx) {
+  const ip = req.headers.get("x-forwarded-for") ?? "127.0.0.1";
+  if (!rateLimit(`instance-on:${ip}`, 10_000)) {
+    return NextResponse.json(
+      { error: "Rate limited — wait 10 seconds between power on requests" },
+      { status: 429 },
+    );
+  }
+
   const { id } = await ctx.params;
 
   const agent = db.select().from(agents).where(eq(agents.id, id)).get();
@@ -49,7 +58,7 @@ export async function POST(_req: NextRequest, ctx: RouteCtx) {
 
   await writeAuditEvent(id, "instance.power_on", {
     dropletId: agent.doDropletId,
-  });
+  }, "user");
 
   return NextResponse.json({ status: "creating" });
 }

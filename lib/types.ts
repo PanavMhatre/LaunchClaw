@@ -3,9 +3,12 @@ import type { InferSelectModel } from "drizzle-orm";
 import type {
   agents,
   auditEvents,
+  budgets,
   chatSessions,
   connectors,
   oauthStates,
+  scheduleEvents,
+  schedules,
   tokenUsageSessions,
   tokenUsageTotals,
 } from "./db/schema";
@@ -21,6 +24,11 @@ export type TokenUsageSession = InferSelectModel<typeof tokenUsageSessions>;
 export type TokenUsageTotal = InferSelectModel<typeof tokenUsageTotals>;
 
 export type AgentStatus = Agent["status"];
+export type AgentRuntimeState = Agent["runtimeState"];
+
+export type Schedule = InferSelectModel<typeof schedules>;
+export type ScheduleEvent = InferSelectModel<typeof scheduleEvents>;
+export type Budget = InferSelectModel<typeof budgets>;
 
 export type Connector = InferSelectModel<typeof connectors>;
 export type OAuthState = InferSelectModel<typeof oauthStates>;
@@ -53,11 +61,27 @@ export interface TunnelStatus {
   state: string;
 }
 
+export interface TunnelControlCommand {
+  type:
+    | "control.pause"
+    | "control.resume"
+    | "control.stop"
+    | "control.restart";
+  fresh_state?: boolean;
+}
+
+export interface TunnelControlAck {
+  type: "control.ack";
+  command: string;
+  success: boolean;
+}
+
 export type TunnelMessage =
   | TunnelChatMessage
   | TunnelChatDelta
   | TunnelChatDone
-  | TunnelStatus;
+  | TunnelStatus
+  | TunnelControlAck;
 
 // ---------------------------------------------------------------------------
 // Frontend chat wire protocol (WS server <-> browser)
@@ -82,10 +106,21 @@ export interface ChatError {
   message: string;
 }
 
+export interface ChatPaused {
+  type: "paused";
+  reason?: string;
+}
+
+export interface ChatStopped {
+  type: "stopped";
+}
+
 export type ChatOutboundMessage =
   | ChatAssistantDelta
   | ChatAssistantDone
-  | ChatError;
+  | ChatError
+  | ChatPaused
+  | ChatStopped;
 
 // ---------------------------------------------------------------------------
 // Request validation
@@ -154,6 +189,69 @@ export const twitterPostSchema = z.object({
   agent_id: z.string().uuid(),
   text: z.string().min(1).max(280),
 });
+
+// ---------------------------------------------------------------------------
+// Schedule + Budget request validation
+// ---------------------------------------------------------------------------
+
+export const scheduleSchema = z
+  .object({
+    mode: z.enum(["time_window", "idle_rule", "both"]),
+    timezone: z.string().default("America/Chicago"),
+    weekdays: z.array(z.number().int().min(0).max(6)).optional(),
+    start_time: z
+      .string()
+      .regex(/^\d{2}:\d{2}$/)
+      .optional(),
+    end_time: z
+      .string()
+      .regex(/^\d{2}:\d{2}$/)
+      .optional(),
+    idle_minutes: z.number().int().min(1).optional(),
+    idle_action: z
+      .enum(["pause_only", "shutdown_instance"])
+      .default("pause_only"),
+    enabled: z.boolean().default(true),
+  })
+  .refine(
+    (d) => {
+      if (d.mode === "time_window" || d.mode === "both") {
+        return (
+          d.weekdays !== undefined &&
+          d.weekdays.length > 0 &&
+          d.start_time !== undefined &&
+          d.end_time !== undefined
+        );
+      }
+      return true;
+    },
+    {
+      message:
+        "time_window/both modes require weekdays, start_time, and end_time",
+    },
+  )
+  .refine(
+    (d) => {
+      if (d.mode === "idle_rule" || d.mode === "both") {
+        return d.idle_minutes !== undefined;
+      }
+      return true;
+    },
+    { message: "idle_rule/both modes require idle_minutes" },
+  );
+
+export type ScheduleRequest = z.infer<typeof scheduleSchema>;
+
+export const budgetSchema = z.object({
+  enabled: z.boolean().default(true),
+  token_limit_total: z.number().int().min(1).nullable().optional(),
+  cost_limit_usd: z.number().min(0).nullable().optional(),
+  action_on_exceed: z
+    .enum(["pause_only", "shutdown_instance", "power_off_instance"])
+    .default("pause_only"),
+});
+
+export type BudgetRequest = z.infer<typeof budgetSchema>;
 
 // ---------------------------------------------------------------------------
 // DigitalOcean API response types

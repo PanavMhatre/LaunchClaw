@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { agents, tokenUsageTotals, tokenUsageSessions } from "@/lib/db/schema";
+import {
+  agents,
+  budgets,
+  tokenUsageTotals,
+  tokenUsageSessions,
+} from "@/lib/db/schema";
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
-// GET /api/v1/agents/:id/tokens — Token usage (total + optional session)
+// GET /api/v1/agents/:id/tokens — Token usage with budget info
 export async function GET(req: NextRequest, ctx: RouteCtx) {
   const { id } = await ctx.params;
 
@@ -20,10 +25,15 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
     .where(eq(tokenUsageTotals.agentId, id))
     .get();
 
+  const lifetimeInput = totals?.totalInputTokens ?? 0;
+  const lifetimeOutput = totals?.totalOutputTokens ?? 0;
+  const lifetimeTotal = lifetimeInput + lifetimeOutput;
+
   const result: Record<string, unknown> = {
-    total: {
-      input_tokens: totals?.totalInputTokens ?? 0,
-      output_tokens: totals?.totalOutputTokens ?? 0,
+    lifetime: {
+      input: lifetimeInput,
+      output: lifetimeOutput,
+      total: lifetimeTotal,
     },
   };
 
@@ -35,10 +45,31 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
       .where(eq(tokenUsageSessions.sessionId, sessionId))
       .get();
 
+    const sessionInput = session?.inputTokens ?? 0;
+    const sessionOutput = session?.outputTokens ?? 0;
     result.session = {
-      input_tokens: session?.inputTokens ?? 0,
-      output_tokens: session?.outputTokens ?? 0,
+      input: sessionInput,
+      output: sessionOutput,
+      total: sessionInput + sessionOutput,
     };
+  }
+
+  const budget = db
+    .select()
+    .from(budgets)
+    .where(eq(budgets.agentId, id))
+    .get();
+
+  if (budget) {
+    const limit = budget.tokenLimitTotal ?? null;
+    const remaining = limit !== null ? Math.max(0, limit - lifetimeTotal) : null;
+    let status: "ok" | "exceeded" | "disabled" = "ok";
+    if (!budget.enabled) status = "disabled";
+    else if (budget.exceededAt) status = "exceeded";
+
+    result.budget = { limit, remaining, status };
+  } else {
+    result.budget = { limit: null, remaining: null, status: "ok" };
   }
 
   return NextResponse.json(result);

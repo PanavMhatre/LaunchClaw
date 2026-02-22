@@ -37,7 +37,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
 
   await writeAuditEvent(id, "instance.boot_complete", {
     callerIp,
-  });
+  }, "agent");
 
   return NextResponse.json({ acknowledged: true });
 }

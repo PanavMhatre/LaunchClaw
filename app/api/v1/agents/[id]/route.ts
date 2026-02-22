@@ -8,6 +8,7 @@ import {
   DoApiError,
 } from "@/lib/do-client";
 import { writeAuditEvent } from "@/lib/audit";
+import { rateLimit } from "@/lib/rate-limit";
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
@@ -43,7 +44,7 @@ export async function GET(_req: NextRequest, ctx: RouteCtx) {
         await writeAuditEvent(id, "instance.online", {
           ipv4: publicIp,
           dropletStatus: droplet.status,
-        });
+        }, "system");
 
         return NextResponse.json({
           agent: { ...agent, status: "online", ipv4: publicIp },
@@ -73,7 +74,7 @@ export async function GET(_req: NextRequest, ctx: RouteCtx) {
 
         await writeAuditEvent(id, "instance.error", {
           reason: "droplet_not_found",
-        });
+        }, "system");
 
         return NextResponse.json({
           agent: {
@@ -87,11 +88,22 @@ export async function GET(_req: NextRequest, ctx: RouteCtx) {
     }
   }
 
-  return NextResponse.json({ agent });
+  return NextResponse.json({
+    agent,
+    ...(agent.deletedAt ? { deleted: true } : {}),
+  });
 }
 
 // DELETE /api/v1/agents/:id — Destroy agent and its droplet
-export async function DELETE(_req: NextRequest, ctx: RouteCtx) {
+export async function DELETE(req: NextRequest, ctx: RouteCtx) {
+  const ip = req.headers.get("x-forwarded-for") ?? "127.0.0.1";
+  if (!rateLimit(`delete:${ip}`, 10_000)) {
+    return NextResponse.json(
+      { error: "Rate limited — wait 10 seconds between deletes" },
+      { status: 429 },
+    );
+  }
+
   const { id } = await ctx.params;
 
   const agent = db.select().from(agents).where(eq(agents.id, id)).get();
@@ -104,7 +116,7 @@ export async function DELETE(_req: NextRequest, ctx: RouteCtx) {
     .where(eq(agents.id, id))
     .run();
 
-  await writeAuditEvent(id, "instance.deleting");
+  await writeAuditEvent(id, "instance.deleting", undefined, "user");
 
   if (agent.doDropletId) {
     try {
@@ -129,10 +141,15 @@ export async function DELETE(_req: NextRequest, ctx: RouteCtx) {
     }
   }
 
-  db.delete(agents).where(eq(agents.id, id)).run();
+  const now = new Date();
+  db.update(agents)
+    .set({ status: "deleting", deletedAt: now, updatedAt: now })
+    .where(eq(agents.id, id))
+    .run();
+
   await writeAuditEvent(id, "instance.deleted", {
     dropletId: agent.doDropletId,
-  });
+  }, "user");
 
   return NextResponse.json({ deleted: true, agent_id: id });
 }

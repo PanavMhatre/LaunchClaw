@@ -46,7 +46,7 @@ export function handleTunnelConnection(ws: WebSocket, req: IncomingMessage) {
     .where(eq(agents.id, agentId))
     .run();
 
-  writeAuditEvent(agentId, "tunnel.connected");
+  writeAuditEvent(agentId, "tunnel.connected", undefined, "agent");
   console.log(`[tunnel] agent ${agentId} connected`);
 
   ws.on("message", (raw) => {
@@ -58,6 +58,11 @@ export function handleTunnelConnection(ws: WebSocket, req: IncomingMessage) {
     }
 
     if (msg.type === "chat.delta" || msg.type === "chat.done") {
+      db.update(agents)
+        .set({ lastActivityAt: new Date(), updatedAt: new Date() })
+        .where(eq(agents.id, agentId))
+        .run();
+
       const viewers = chatSockets.get(agentId);
       if (!viewers) return;
 
@@ -86,7 +91,7 @@ export function handleTunnelConnection(ws: WebSocket, req: IncomingMessage) {
       .where(eq(agents.id, agentId))
       .run();
 
-    writeAuditEvent(agentId, "tunnel.disconnected");
+    writeAuditEvent(agentId, "tunnel.disconnected", undefined, "agent");
     console.log(`[tunnel] agent ${agentId} disconnected`);
 
     // Notify any chat viewers that the agent is gone

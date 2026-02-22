@@ -2,10 +2,16 @@ import { createServer } from "http";
 import { WebSocketServer } from "ws";
 import { handleTunnelConnection } from "./tunnel-handler";
 import { handleChatConnection } from "./chat-handler";
+import { handleControlRequest } from "./control-handler";
+import { runSchedulerTick } from "../lib/scheduler-worker";
 
 const PORT = Number(process.env.WS_PORT) || 8080;
 
-const httpServer = createServer((_req, res) => {
+const httpServer = createServer((req, res) => {
+  if (req.method === "POST" && req.url === "/internal/control") {
+    handleControlRequest(req, res);
+    return;
+  }
   res.writeHead(200, { "Content-Type": "text/plain" });
   res.end("LaunchClaw WS Server");
 });
@@ -34,4 +40,14 @@ httpServer.on("upgrade", (req, socket, head) => {
 
 httpServer.listen(PORT, () => {
   console.log(`[ws-server] listening on port ${PORT}`);
+
+  const SCHEDULER_INTERVAL_MS = 60_000;
+  setInterval(async () => {
+    try {
+      await runSchedulerTick();
+    } catch (err) {
+      console.error("[scheduler] tick error:", err);
+    }
+  }, SCHEDULER_INTERVAL_MS);
+  console.log(`[scheduler] running every ${SCHEDULER_INTERVAL_MS / 1000}s`);
 });

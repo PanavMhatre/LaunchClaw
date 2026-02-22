@@ -31,13 +31,13 @@ export async function POST(req: NextRequest) {
 
   const messageId = `stub_${crypto.randomUUID()}`;
 
-  await writeAuditEvent(agent_id, "tool.invoked", {
+  await writeAuditEvent(agent_id, "tool.succeeded", {
     tool: "gmail.send",
     to,
     subject,
     stubbed: true,
     message_id: messageId,
-  });
+  }, "agent");
 
   return NextResponse.json({ ok: true, message_id: messageId });
 }

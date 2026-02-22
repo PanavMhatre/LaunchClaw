@@ -39,15 +39,19 @@ export async function POST(req: NextRequest) {
   });
   const result = await slackRes.json();
 
-  await writeAuditEvent(agent_id, "tool.invoked", {
-    tool: "slack.postMessage",
-    channel,
-    ok: result.ok,
-  });
-
   if (!result.ok) {
+    await writeAuditEvent(agent_id, "tool.failed", {
+      tool: "slack.postMessage",
+      channel,
+      error: result.error,
+    }, "agent");
     return NextResponse.json({ error: result.error }, { status: 502 });
   }
+
+  await writeAuditEvent(agent_id, "tool.succeeded", {
+    tool: "slack.postMessage",
+    channel,
+  }, "agent");
 
   return NextResponse.json({
     ok: true,

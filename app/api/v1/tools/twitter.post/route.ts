@@ -31,12 +31,12 @@ export async function POST(req: NextRequest) {
 
   const tweetId = `stub_${crypto.randomUUID()}`;
 
-  await writeAuditEvent(agent_id, "tool.invoked", {
+  await writeAuditEvent(agent_id, "tool.succeeded", {
     tool: "twitter.post",
     text_length: text.length,
     stubbed: true,
     tweet_id: tweetId,
-  });
+  }, "agent");
 
   return NextResponse.json({ ok: true, tweet_id: tweetId });
 }

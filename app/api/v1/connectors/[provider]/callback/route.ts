@@ -105,7 +105,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
   await writeAuditEvent(stateRow.agentId, "connector.connected", {
     provider,
     scopes: tokens.scopes,
-  });
+  }, "system");
 
   return NextResponse.redirect(`${stateRow.redirectUrl}?connected=${provider}`);
 }

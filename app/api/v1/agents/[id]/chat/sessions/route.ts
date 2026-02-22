@@ -41,7 +41,7 @@ export async function POST(_req: NextRequest, ctx: RouteCtx) {
     })
     .run();
 
-  await writeAuditEvent(id, "chat.session_created", { sessionId });
+  await writeAuditEvent(id, "chat.session_created", { sessionId }, "user");
 
   return NextResponse.json({ session_id: sessionId }, { status: 201 });
 }

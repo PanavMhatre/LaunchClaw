@@ -43,16 +43,22 @@ export async function POST(req: NextRequest) {
   );
   const result = await ghRes.json();
 
-  await writeAuditEvent(agent_id, "tool.invoked", {
+  if (!ghRes.ok) {
+    await writeAuditEvent(agent_id, "tool.failed", {
+      tool: "github.createIssue",
+      owner,
+      repo,
+      error: result.message,
+    }, "agent");
+    return NextResponse.json({ error: result.message }, { status: ghRes.status });
+  }
+
+  await writeAuditEvent(agent_id, "tool.succeeded", {
     tool: "github.createIssue",
     owner,
     repo,
     issue_number: result.number,
-  });
-
-  if (!ghRes.ok) {
-    return NextResponse.json({ error: result.message }, { status: ghRes.status });
-  }
+  }, "agent");
 
   return NextResponse.json({
     ok: true,

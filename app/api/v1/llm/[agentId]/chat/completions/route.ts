@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { agents, tokenUsageSessions, tokenUsageTotals } from "@/lib/db/schema";
+import { agents, budgets, tokenUsageSessions, tokenUsageTotals } from "@/lib/db/schema";
 import { writeAuditEvent } from "@/lib/audit";
+import { checkAndEnforceBudget } from "@/lib/budget-enforcer";
 
 const MINIMAX_BASE = "https://api.minimax.io/v1";
 
@@ -35,6 +36,26 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
   if (agent.deviceToken && bearerToken !== agent.deviceToken) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  if (agent.status === "paused") {
+    return NextResponse.json(
+      { error: "Agent is paused" },
+      { status: 403 },
+    );
+  }
+
+  const budget = db.select().from(budgets).where(eq(budgets.agentId, agentId)).get();
+  if (budget?.enabled && budget.exceededAt) {
+    return NextResponse.json(
+      { error: "Budget exceeded — agent is paused" },
+      { status: 429 },
+    );
+  }
+
+  db.update(agents)
+    .set({ lastActivityAt: new Date(), updatedAt: new Date() })
+    .where(eq(agents.id, agentId))
+    .run();
 
   let body: Record<string, unknown>;
   try {
@@ -227,7 +248,9 @@ function recordTokenUsage(
       inputTokens,
       outputTokens,
       sessionId,
-    });
+    }, "agent");
+
+    checkAndEnforceBudget(agentId);
   } catch (err) {
     console.error("[llm-proxy] token accounting error:", err);
   }

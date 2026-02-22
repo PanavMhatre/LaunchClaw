@@ -27,13 +27,25 @@ export function handleChatConnection(ws: WebSocket, req: IncomingMessage) {
     return;
   }
 
+  const agent = db.select().from(agents).where(eq(agents.id, agentId)).get();
+
+  if (agent?.runtimeState === "paused") {
+    ws.send(JSON.stringify({ type: "paused", reason: agent.pauseReason }));
+    ws.close(4003, "Agent is paused");
+    return;
+  }
+  if (agent?.runtimeState === "stopped") {
+    ws.send(JSON.stringify({ type: "stopped" }));
+    ws.close(4003, "Agent is stopped");
+    return;
+  }
+
   const tunnel = tunnelSockets.get(agentId);
   if (!tunnel || tunnel.readyState !== 1) {
     ws.close(4009, "Agent is not reachable");
     return;
   }
 
-  // Register this chat viewer
   let viewers = chatSockets.get(agentId);
   if (!viewers) {
     viewers = new Set();
@@ -41,7 +53,6 @@ export function handleChatConnection(ws: WebSocket, req: IncomingMessage) {
   }
   viewers.add(ws);
 
-  // Mark active session so the LLM proxy can attribute tokens
   db.update(agents)
     .set({ activeSessionId: sessionId, updatedAt: new Date() })
     .where(eq(agents.id, agentId))
@@ -59,6 +70,26 @@ export function handleChatConnection(ws: WebSocket, req: IncomingMessage) {
 
     if (msg.type !== "user_message" || typeof msg.text !== "string") return;
 
+    const currentAgent = db
+      .select()
+      .from(agents)
+      .where(eq(agents.id, agentId))
+      .get();
+
+    if (currentAgent?.runtimeState === "paused") {
+      ws.send(JSON.stringify({ type: "paused", reason: currentAgent.pauseReason }));
+      return;
+    }
+    if (currentAgent?.runtimeState === "stopped") {
+      ws.send(JSON.stringify({ type: "stopped" }));
+      return;
+    }
+
+    db.update(agents)
+      .set({ lastActivityAt: new Date(), updatedAt: new Date() })
+      .where(eq(agents.id, agentId))
+      .run();
+
     const currentTunnel = tunnelSockets.get(agentId);
     if (!currentTunnel || currentTunnel.readyState !== 1) {
       ws.send(JSON.stringify({ type: "error", message: "Agent not reachable" }));
@@ -75,14 +106,13 @@ export function handleChatConnection(ws: WebSocket, req: IncomingMessage) {
     writeAuditEvent(agentId, "chat.user_message", {
       sessionId,
       textLength: msg.text.length,
-    });
+    }, "user");
   });
 
   ws.on("close", () => {
     viewers?.delete(ws);
     if (viewers && viewers.size === 0) {
       chatSockets.delete(agentId);
-      // Clear active session when no viewers remain
       db.update(agents)
         .set({ activeSessionId: null, updatedAt: new Date() })
         .where(eq(agents.id, agentId))
