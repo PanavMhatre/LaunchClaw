@@ -7,7 +7,7 @@ import { writeAuditEvent } from "../lib/audit";
 import { tunnelSockets, chatSockets } from "./tunnel-map";
 
 export function handleTunnelConnection(ws: WebSocket, req: IncomingMessage) {
-  const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+  const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "0.0.0.0"}`);
   const agentId = url.searchParams.get("agent_id");
   const deviceToken = url.searchParams.get("device_token");
 

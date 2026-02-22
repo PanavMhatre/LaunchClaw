@@ -15,9 +15,9 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
     return NextResponse.json({ error: "Agent not found" }, { status: 404 });
   }
 
-  if (agent.status !== "online") {
+  if (agent.status === "deleting") {
     return NextResponse.json(
-      { error: `Agent is ${agent.status}, must be online to pause` },
+      { error: "Agent is being deleted" },
       { status: 409 },
     );
   }
@@ -25,6 +25,13 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
   if (agent.runtimeState === "paused") {
     return NextResponse.json(
       { error: "Agent is already paused" },
+      { status: 409 },
+    );
+  }
+
+  if (agent.runtimeState === "stopped") {
+    return NextResponse.json(
+      { error: "Agent is stopped — restart it first" },
       { status: 409 },
     );
   }
@@ -47,7 +54,11 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
     .where(eq(agents.id, id))
     .run();
 
-  await relayControlCommand(id, "control.pause");
+  // Best-effort relay — if WS server or tunnel isn't available, we still paused in the DB
+  const relay = await relayControlCommand(id, "control.pause");
+  if (!relay.ok) {
+    console.log(`[control/pause] relay failed for ${id} (best-effort): ${relay.error}`);
+  }
 
   await writeAuditEvent(id, "control.pause", { reason }, "user");
 

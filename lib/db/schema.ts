@@ -78,7 +78,7 @@ export const connectors = sqliteTable("connectors", {
     .notNull()
     .references(() => agents.id, { onDelete: "cascade" }),
   provider: text("provider", {
-    enum: ["slack", "google", "github", "twitter"],
+    enum: ["slack", "google", "github"],
   }).notNull(),
   status: text("status", {
     enum: ["pending", "connected", "revoked", "error"],

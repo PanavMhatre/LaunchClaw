@@ -1,7 +1,6 @@
 import * as slack from "./slack";
 import * as google from "./google";
 import * as github from "./github";
-import * as twitter from "./twitter";
 
 export interface OAuthProvider {
   defaultScopes: string[];
@@ -21,7 +20,6 @@ const providers: Record<string, OAuthProvider> = {
   slack,
   google,
   github,
-  twitter,
 };
 
 export function getProvider(name: string): OAuthProvider | undefined {

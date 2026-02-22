@@ -2,22 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { agents } from "@/lib/db/schema";
-import { powerOnDroplet, DoApiError } from "@/lib/do-client";
+import { rebootDroplet, DoApiError } from "@/lib/do-client";
 import { writeAuditEvent } from "@/lib/audit";
-import { rateLimit } from "@/lib/rate-limit";
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
-// POST /api/v1/agents/:id/instance/on — Power on
-export async function POST(req: NextRequest, ctx: RouteCtx) {
-  const ip = req.headers.get("x-forwarded-for") ?? "127.0.0.1";
-  if (!rateLimit(`instance-on:${ip}`, 10_000)) {
-    return NextResponse.json(
-      { error: "Rate limited — wait 10 seconds between power on requests" },
-      { status: 429 },
-    );
-  }
-
+// POST /api/v1/agents/:id/instance/restart — Reboot the agent droplet
+export async function POST(_req: NextRequest, ctx: RouteCtx) {
   const { id } = await ctx.params;
 
   const agent = db.select().from(agents).where(eq(agents.id, id)).get();
@@ -32,19 +23,19 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
     );
   }
 
-  if (agent.status === "online" || agent.status === "creating") {
+  if (agent.status === "offline") {
     return NextResponse.json(
-      { error: "Agent is already running or starting" },
+      { error: "Agent is offline — use resume (power on) instead of restart" },
       { status: 409 },
     );
   }
 
   try {
-    await powerOnDroplet(agent.doDropletId);
+    await rebootDroplet(agent.doDropletId);
   } catch (err) {
     if (err instanceof DoApiError) {
       return NextResponse.json(
-        { error: `Power on failed: ${err.message}` },
+        { error: `Reboot failed: ${err.message}` },
         { status: 502 },
       );
     }
@@ -52,13 +43,13 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
   }
 
   db.update(agents)
-    .set({ status: "creating", runtimeState: "running", pauseReason: null, updatedAt: new Date() })
+    .set({ status: "creating", updatedAt: new Date() })
     .where(eq(agents.id, id))
     .run();
 
-  await writeAuditEvent(id, "instance.power_on", {
+  await writeAuditEvent(id, "instance.restart", {
     dropletId: agent.doDropletId,
-  }, "user");
+  });
 
-  return NextResponse.json({ status: "creating" });
+  return NextResponse.json({ status: "restarting" });
 }

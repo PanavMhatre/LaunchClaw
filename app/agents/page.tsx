@@ -2,14 +2,13 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { ChevronDown, Grid3X3, Lock, Shield, Plus, Github, Slack, Twitter } from "lucide-react"
+import { ChevronDown, Grid3X3, Lock, Shield, Plus, Github, Slack, Loader2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
 const ACCESS_PASSWORD = "launchclaw"
 const MAX_AGENTS = 15
-const AGENTS_STORAGE_KEY = "launchclaw.agents.v1"
 
 function GmailLogo() {
   return (
@@ -46,24 +45,17 @@ const AVAILABLE_CONNECTIONS: ConnectionOption[] = [
   { id: "gmail", label: "Gmail", icon: <GmailLogo /> },
   { id: "github", label: "Github", icon: <Github className="w-4 h-4 text-white" /> },
   { id: "google-calendar", label: "Google Calendar", icon: <GoogleCalendarLogo /> },
-  { id: "twitter", label: "Twitter", icon: <Twitter className="w-4 h-4 text-[#1DA1F2]" /> },
 ]
 
 type Agent = {
   id: string
   name: string
-  status: "ONLINE"
+  status: string
   password: string
   connections: string[]
 }
 
-const INITIAL_AGENTS = [
-  { id: "agent-01", name: "AGENT 01", status: "ONLINE", password: ACCESS_PASSWORD, connections: [] },
-  { id: "agent-02", name: "AGENT 02", status: "ONLINE", password: ACCESS_PASSWORD, connections: [] },
-  { id: "agent-03", name: "AGENT 03", status: "ONLINE", password: ACCESS_PASSWORD, connections: [] },
-  { id: "agent-04", name: "AGENT 04", status: "ONLINE", password: ACCESS_PASSWORD, connections: [] },
-  { id: "agent-05", name: "AGENT 05", status: "ONLINE", password: ACCESS_PASSWORD, connections: [] },
-]
+const INITIAL_AGENTS: Agent[] = []
 
 export default function HomePage() {
   const router = useRouter()
@@ -77,77 +69,99 @@ export default function HomePage() {
   const [isConnectionsMenuOpen, setIsConnectionsMenuOpen] = useState(false)
   const [newAgentConnections, setNewAgentConnections] = useState<string[]>([])
   const [newAgentPassword, setNewAgentPassword] = useState("")
+  const [newAgentName, setNewAgentName] = useState("")
   const [addAgentError, setAddAgentError] = useState("")
+  const [addAgentLoading, setAddAgentLoading] = useState(false)
   const [selectedModel, setSelectedModel] = useState("MiniMax M2.5")
 
-  useEffect(() => {
-    if (typeof window === "undefined") return
-
+  // Load agents from API
+  const loadAgents = async () => {
     try {
-      const storedAgents = window.localStorage.getItem(AGENTS_STORAGE_KEY)
-      if (storedAgents) {
-        const parsedAgents = JSON.parse(storedAgents) as unknown
-        if (Array.isArray(parsedAgents) && parsedAgents.length > 0) {
-          const normalizedAgents = parsedAgents.flatMap((item) => {
-            if (!item || typeof item !== "object") return []
-            const candidate = item as Partial<Agent> & { connections?: unknown }
-            if (
-              typeof candidate.id !== "string" ||
-              typeof candidate.name !== "string" ||
-              candidate.status !== "ONLINE" ||
-              typeof candidate.password !== "string"
-            ) {
-              return []
-            }
+      const res = await fetch("/api/v1/agents", { cache: "no-store" })
+      if (!res.ok) return
 
-            const connections = Array.isArray(candidate.connections)
-              ? candidate.connections.filter((connection): connection is string => typeof connection === "string")
-              : []
-            return [
-              {
-                id: candidate.id,
-                name: candidate.name,
-                status: "ONLINE" as const,
-                password: candidate.password,
-                connections,
-              },
-            ]
-          })
-
-          if (normalizedAgents.length > 0) {
-            setAgents(normalizedAgents)
-          }
-        }
+      const data = (await res.json()) as {
+        agents?: Array<{
+          id: string
+          name: string
+          status: string
+          runtimeState?: string
+        }>
       }
-    } catch (error) {
-      console.error("Failed to load stored agents:", error)
+
+      if (Array.isArray(data.agents)) {
+        setAgents(
+          data.agents.map((a) => ({
+            id: a.id,
+            name: a.name,
+            status: a.runtimeState === "paused" ? "PAUSED" : a.status === "online" ? "ONLINE" : a.status?.toUpperCase() ?? "UNKNOWN",
+            password: ACCESS_PASSWORD,
+            connections: [],
+          })),
+        )
+      }
+    } catch (err) {
+      console.error("Failed to load agents from API:", err)
     } finally {
       setHasLoadedAgents(true)
     }
-  }, [])
+  }
 
   useEffect(() => {
-    if (typeof window === "undefined" || !hasLoadedAgents) return
-
-    try {
-      window.localStorage.setItem(AGENTS_STORAGE_KEY, JSON.stringify(agents))
-    } catch (error) {
-      console.error("Failed to persist agents:", error)
-    }
-  }, [agents, hasLoadedAgents])
+    void loadAgents()
+  }, [])
 
   const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? null
 
-  const getNextAgentSlot = (currentAgents: Agent[]) => {
-    const usedNumbers = new Set(
-      currentAgents
-        .map((agent) => Number.parseInt(agent.id.replace("agent-", ""), 10))
-        .filter((value) => Number.isFinite(value)),
-    )
-    for (let i = 1; i <= MAX_AGENTS; i += 1) {
-      if (!usedNumbers.has(i)) return i
+  const mapConnectionsToProviders = (connections: string[]): string[] => {
+    const providerMap: Record<string, string> = {
+      slack: "slack",
+      gmail: "google",
+      "google-calendar": "google",
+      github: "github",
     }
-    return null
+    return [...new Set(connections.map((c) => providerMap[c]).filter(Boolean))] as string[]
+  }
+
+  const addAgent = async () => {
+    if (agents.length >= MAX_AGENTS) return
+    if (!newAgentPassword.trim()) {
+      setAddAgentError("Password is required for new agent.")
+      return
+    }
+
+    const agentName = newAgentName.trim() || `Agent ${agents.length + 1}`
+
+    setAddAgentLoading(true)
+    setAddAgentError("")
+
+    try {
+      const res = await fetch("/api/v1/agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: agentName,
+          connections: mapConnectionsToProviders(newAgentConnections),
+        }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error ?? `Failed to create agent (${res.status})`)
+      }
+
+      const data = (await res.json()) as { agent_id?: string }
+      if (!data.agent_id) throw new Error("Missing agent_id in response")
+
+      // Refresh agent list from API
+      await loadAgents()
+      closeAddAgentPrompt()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to create agent."
+      setAddAgentError(msg)
+    } finally {
+      setAddAgentLoading(false)
+    }
   }
 
   const openAddAgentPrompt = () => {
@@ -156,7 +170,9 @@ export default function HomePage() {
     setIsConnectionsMenuOpen(false)
     setNewAgentConnections([])
     setNewAgentPassword("")
+    setNewAgentName("")
     setAddAgentError("")
+    setAddAgentLoading(false)
   }
 
   const closeAddAgentPrompt = () => {
@@ -164,7 +180,9 @@ export default function HomePage() {
     setIsConnectionsMenuOpen(false)
     setNewAgentConnections([])
     setNewAgentPassword("")
+    setNewAgentName("")
     setAddAgentError("")
+    setAddAgentLoading(false)
   }
 
   const toggleConnection = (connectionId: string) => {
@@ -173,37 +191,22 @@ export default function HomePage() {
     )
   }
 
-  const addAgent = () => {
-    if (agents.length >= MAX_AGENTS) return
-    if (!newAgentPassword.trim()) {
-      setAddAgentError("Password is required for new agent.")
-      return
+  const terminateAgent = async (agentId: string) => {
+    try {
+      const res = await fetch(`/api/v1/agents/${agentId}`, {
+        method: "DELETE",
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        console.error("Failed to terminate agent:", data?.error ?? res.statusText)
+      }
+    } catch (err) {
+      console.error("Failed to terminate agent:", err)
     }
 
-    const nextSlot = getNextAgentSlot(agents)
-    if (!nextSlot) {
-      setAddAgentError("No agent slots available.")
-      return
-    }
-
-    const paddedNumber = String(nextSlot).padStart(2, "0")
-    const nextAgentId = `agent-${paddedNumber}`
-
-    setAgents((current) => [
-      ...current,
-      {
-        id: nextAgentId,
-        name: `AGENT ${paddedNumber}`,
-        status: "ONLINE",
-        password: newAgentPassword,
-        connections: newAgentConnections,
-      },
-    ])
-    closeAddAgentPrompt()
-  }
-
-  const terminateAgent = (agentId: string) => {
     setAgents((current) => current.filter((agent) => agent.id !== agentId))
+    void loadAgents()
 
     if (selectedAgentId === agentId) {
       closePasswordPrompt()
@@ -224,11 +227,6 @@ export default function HomePage() {
 
   const unlockAgentDashboard = () => {
     if (!selectedAgent) return
-
-    if (password !== selectedAgent.password) {
-      setAuthError("Invalid password")
-      return
-    }
 
     router.push(`/dashboard?agent=${selectedAgent.id}`)
   }
@@ -259,7 +257,12 @@ export default function HomePage() {
                 >
                   <div className="flex items-center justify-between mb-2">
                     <Shield className="w-4 h-4 text-orange-500" />
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-white/20 text-white">{agent.status}</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded ${
+                      agent.status === "ONLINE" ? "bg-green-500/20 text-green-400" :
+                      agent.status === "PAUSED" ? "bg-orange-500/20 text-orange-400" :
+                      agent.status === "CREATING" ? "bg-blue-500/20 text-blue-400" :
+                      "bg-neutral-500/20 text-neutral-300"
+                    }`}>{agent.status}</span>
                   </div>
                   <p className="text-sm font-medium tracking-wide text-white">{agent.name}</p>
                   <div className="flex gap-2">
@@ -288,7 +291,7 @@ export default function HomePage() {
                   <Plus className="w-4 h-4 text-orange-500" />
                   <span className="text-[10px] px-2 py-0.5 rounded bg-neutral-700 text-neutral-300">ADD</span>
                 </div>
-                <p className="text-sm font-medium tracking-wide">
+                <p className="text-sm font-medium tracking-wide text-white">
                   {agents.length >= MAX_AGENTS ? "MAX AGENTS REACHED" : "ADD AGENT"}
                 </p>
               </button>
@@ -371,6 +374,16 @@ export default function HomePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
+                <label className="text-xs text-neutral-400 tracking-wider">AGENT NAME</label>
+                <Input
+                  value={newAgentName}
+                  onChange={(event) => setNewAgentName(event.target.value)}
+                  className="bg-neutral-800 border-neutral-600 text-white"
+                  placeholder="e.g. My Agent"
+                />
+              </div>
+
+              <div className="space-y-2">
                 <label className="text-xs text-neutral-400 tracking-wider">CONNECTIONS</label>
                 <button
                   type="button"
@@ -432,7 +445,7 @@ export default function HomePage() {
                     onChange={(event) => setNewAgentPassword(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") {
-                        addAgent()
+                        void addAgent()
                       }
                     }}
                     className="pl-10 bg-neutral-800 border-neutral-600 text-white"
@@ -446,12 +459,24 @@ export default function HomePage() {
                 <Button
                   variant="outline"
                   onClick={closeAddAgentPrompt}
+                  disabled={addAgentLoading}
                   className="border-neutral-700 text-neutral-300 hover:bg-neutral-800 bg-transparent"
                 >
                   Cancel
                 </Button>
-                <Button onClick={addAgent} className="bg-orange-500 hover:bg-orange-600 text-white">
-                  Add Agent
+                <Button
+                  onClick={() => void addAgent()}
+                  disabled={addAgentLoading}
+                  className="bg-orange-500 hover:bg-orange-600 text-white"
+                >
+                  {addAgentLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Provisioning...
+                    </>
+                  ) : (
+                    "Add Agent"
+                  )}
                 </Button>
               </div>
             </CardContent>

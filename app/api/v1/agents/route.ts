@@ -43,9 +43,9 @@ export async function POST(req: NextRequest) {
   const gatewayToken = crypto.randomUUID().replace(/-/g, "");
 
   const controlPlaneUrl =
-    process.env.CONTROL_PLANE_URL ?? "http://localhost:3000";
+    process.env.CONTROL_PLANE_URL ?? "http://control-plane:3000";
   const tunnelUrl =
-    process.env.WS_TUNNEL_URL ?? "ws://localhost:8080/ws/tunnel";
+    process.env.WS_TUNNEL_URL ?? "ws://ws-server:8080/ws/tunnel";
   const llmProxyBaseUrl = `${controlPlaneUrl}/api/v1/llm/${agentId}`;
 
   const userData = generateCloudInit({
@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
     controlPlaneUrl,
     tunnelUrl,
     llmProxyBaseUrl,
+    allowedConnectors: connections,
   });
 
   const shortId = agentId.split("-")[0];
@@ -96,7 +97,7 @@ export async function POST(req: NextRequest) {
       .run();
 
     // Create pending connector rows for requested connections
-    const validProviders = ["slack", "google", "github", "twitter"];
+    const validProviders = ["slack", "google", "github"];
     for (const provider of connections) {
       if (validProviders.includes(provider)) {
         db.insert(connectors)

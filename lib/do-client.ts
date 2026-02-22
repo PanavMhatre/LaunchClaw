@@ -132,6 +132,10 @@ export function powerOnDroplet(dropletId: number) {
   return dropletAction(dropletId, "power_on");
 }
 
+export function rebootDroplet(dropletId: number) {
+  return dropletAction(dropletId, "reboot");
+}
+
 // ---------------------------------------------------------------------------
 // Actions polling
 // ---------------------------------------------------------------------------

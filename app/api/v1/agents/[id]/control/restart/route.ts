@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { agents, budgets } from "@/lib/db/schema";
 import { writeAuditEvent } from "@/lib/audit";
 import { relayControlCommand } from "@/lib/control-relay";
+import { rebootDroplet, powerOnDroplet } from "@/lib/do-client";
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
@@ -15,9 +16,9 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
     return NextResponse.json({ error: "Agent not found" }, { status: 404 });
   }
 
-  if (agent.status !== "online") {
+  if (agent.status === "deleting") {
     return NextResponse.json(
-      { error: `Agent is ${agent.status}, must be online to restart` },
+      { error: "Agent is being deleted" },
       { status: 409 },
     );
   }
@@ -30,17 +31,43 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
     // body is optional
   }
 
+  // Best-effort: try to relay the restart command through the tunnel
   const relay = await relayControlCommand(id, "control.restart", freshState);
   if (!relay.ok) {
-    return NextResponse.json(
-      { error: `Failed to relay restart command: ${relay.error}` },
-      { status: 502 },
+    console.log(
+      `[control/restart] relay failed for ${id} (best-effort): ${relay.error}`,
     );
+  }
+
+  // Actually reboot or power on the DO droplet
+  if (agent.doDropletId) {
+    if (agent.status === "offline" || agent.runtimeState === "stopped") {
+      // Droplet is off — power it on
+      try {
+        await powerOnDroplet(agent.doDropletId);
+      } catch (err) {
+        console.error(`[control/restart] power on failed for droplet ${agent.doDropletId}:`, err);
+      }
+    } else {
+      // Droplet is on — reboot it
+      try {
+        await rebootDroplet(agent.doDropletId);
+      } catch (err) {
+        console.error(`[control/restart] reboot failed for droplet ${agent.doDropletId}:`, err);
+        // Try power on as fallback
+        try {
+          await powerOnDroplet(agent.doDropletId);
+        } catch (err2) {
+          console.error(`[control/restart] power on fallback also failed:`, err2);
+        }
+      }
+    }
   }
 
   const now = new Date();
   db.update(agents)
     .set({
+      status: "creating",
       runtimeState: "running",
       pauseReason: null,
       updatedAt: now,
@@ -67,5 +94,5 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
     "user",
   );
 
-  return NextResponse.json({ runtime_state: "running", fresh_state: freshState });
+  return NextResponse.json({ status: "creating", runtime_state: "running", fresh_state: freshState });
 }

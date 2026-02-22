@@ -44,7 +44,11 @@ export async function POST(_req: NextRequest, ctx: RouteCtx) {
     .where(eq(agents.id, id))
     .run();
 
-  await relayControlCommand(id, "control.resume");
+  // Best-effort relay
+  const relay = await relayControlCommand(id, "control.resume");
+  if (!relay.ok) {
+    console.log(`[control/resume] relay failed for ${id} (best-effort): ${relay.error}`);
+  }
 
   await writeAuditEvent(id, "control.resume", undefined, "user");
 

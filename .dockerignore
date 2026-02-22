@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+*.md
+!README.md
+.env
+.env.*
+launchclaw.db
+coverage
+dist
+build
+.DS_Store

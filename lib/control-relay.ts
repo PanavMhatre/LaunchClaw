@@ -1,5 +1,5 @@
 const WS_SERVER_URL =
-  process.env.WS_INTERNAL_URL ?? "http://localhost:8080";
+  process.env.WS_INTERNAL_URL ?? "http://ws-server:8080";
 
 /**
  * Relay a control command to the WS server, which forwards it to the

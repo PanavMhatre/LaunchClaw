@@ -16,6 +16,7 @@ export type AuditEventType =
   | "instance.error"
   | "instance.deleting"
   | "instance.deleted"
+  | "instance.restart"
   // Tunnel
   | "tunnel.connected"
   | "tunnel.disconnected"

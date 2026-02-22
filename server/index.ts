@@ -21,7 +21,7 @@ const wss = new WebSocketServer({ noServer: true });
 httpServer.on("upgrade", (req, socket, head) => {
   const pathname = new URL(
     req.url ?? "/",
-    `http://${req.headers.host ?? "localhost"}`,
+    `http://${req.headers.host ?? "0.0.0.0"}`,
   ).pathname;
 
   if (pathname === "/ws/tunnel") {

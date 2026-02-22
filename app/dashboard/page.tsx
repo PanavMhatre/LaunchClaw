@@ -15,6 +15,7 @@ export default function LaunchClawDashboard() {
   const [activeSection, setActiveSection] = useState("chat")
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [currentAgentId, setCurrentAgentId] = useState("")
   const [currentAgentNumber, setCurrentAgentNumber] = useState("--")
   const [hasValidAgent, setHasValidAgent] = useState(false)
 
@@ -23,10 +24,18 @@ export default function LaunchClawDashboard() {
 
     const updateViewport = () => setIsMobile(window.innerWidth < 768)
     const queryAgentId = new URLSearchParams(window.location.search).get("agent") ?? ""
-    const agentMatch = queryAgentId.match(/^agent-(\d{2})$/)
+    const legacyAgentMatch = queryAgentId.match(/^agent-(\d{2})$/)
+    const uuidAgentMatch = queryAgentId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
 
-    setCurrentAgentNumber(agentMatch ? agentMatch[1] : "--")
-    setHasValidAgent(Boolean(agentMatch))
+    setCurrentAgentId(queryAgentId)
+    if (legacyAgentMatch) {
+      setCurrentAgentNumber(legacyAgentMatch[1])
+    } else if (uuidAgentMatch) {
+      setCurrentAgentNumber(queryAgentId.slice(0, 8).toUpperCase())
+    } else {
+      setCurrentAgentNumber("--")
+    }
+    setHasValidAgent(Boolean(legacyAgentMatch || uuidAgentMatch))
     updateViewport()
     window.addEventListener("resize", updateViewport)
 
@@ -47,10 +56,10 @@ export default function LaunchClawDashboard() {
     usage: "USAGE",
   }
   const sectionComponents: Record<string, JSX.Element> = {
-    chat: <CommandCenterPage />,
+    chat: <CommandCenterPage agentId={currentAgentId} />,
     security: <IntelligencePage />,
     logs: <LogsPage />,
-    control: <OperationsPage />,
+    control: <OperationsPage agentId={currentAgentId} />,
     usage: <SystemsPage />,
   }
   const activeSectionLabel = sectionLabels[activeSection] ?? sectionLabels.chat

@@ -6,7 +6,7 @@ export function getAuthUrl(
   state: string,
 ): string {
   const controlPlane =
-    process.env.CONTROL_PLANE_URL ?? "http://localhost:3000";
+    process.env.CONTROL_PLANE_URL ?? "http://control-plane:3000";
   const params = new URLSearchParams({
     state,
     code: `mock_twitter_code_${crypto.randomUUID()}`,

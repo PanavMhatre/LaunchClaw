@@ -9,6 +9,7 @@ export interface CloudInitOptions {
   controlPlaneUrl: string;
   tunnelUrl: string;
   llmProxyBaseUrl: string;
+  allowedConnectors?: string[];
 }
 
 /**
@@ -61,8 +62,11 @@ curl -sf -X POST "\${CONTROL_PLANE}/api/v1/agents/\${AGENT_ID}/heartbeat" \\
 
 # ---------- 3. Install Node.js 22 if not present ----------
 if ! command -v node &>/dev/null || [ "$(node -v | cut -d. -f1 | tr -d v)" -lt 22 ]; then
-  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  curl -fsSL https://deb.nodesource.com/setup_22.x -o /tmp/nodesource_setup.sh
+  chmod +x /tmp/nodesource_setup.sh
+  bash /tmp/nodesource_setup.sh
   apt-get install -y nodejs
+  rm -f /tmp/nodesource_setup.sh
 fi
 
 # ---------- 4. Create agentd directory ----------
@@ -82,7 +86,7 @@ AGENT_ID=\${AGENT_ID}
 DEVICE_TOKEN=\${DEVICE_TOKEN}
 GATEWAY_TOKEN=\${GATEWAY_TOKEN}
 TUNNEL_URL=\${TUNNEL_URL}
-GATEWAY_HOST=127.0.0.1
+GATEWAY_HOST=0.0.0.0
 GATEWAY_PORT=18789
 ENV_EOF
 
@@ -99,6 +103,7 @@ cat > "\${OPENCLAW_ENV_DIR}/launchclaw.env" << OC_EOF
 OPENCLAW_GATEWAY_TOKEN=\${GATEWAY_TOKEN}
 OPENAI_BASE_URL=\${LLM_PROXY_BASE_URL}
 OPENAI_API_KEY=\${DEVICE_TOKEN}
+OPENCLAW_ALLOWED_CONNECTORS=${opts.allowedConnectors?.join(",") ?? ""}
 OC_EOF
 
 # If openclaw uses a systemd service, create an override to source our env
